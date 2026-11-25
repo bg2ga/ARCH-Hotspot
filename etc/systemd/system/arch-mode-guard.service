@@ -1,0 +1,13 @@
+[Unit]
+Description=ARCH boot mode guard (MMDVM xor TETRA, never both)
+After=multi-user.target mmdvm-multi.service tetra-bs.service
+Wants=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/bash /usr/local/bin/arch-mode-guard.sh
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

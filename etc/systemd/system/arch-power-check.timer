@@ -1,0 +1,9 @@
+[Unit]
+Description=Periodic ARCH power / throttling check
+
+[Timer]
+OnBootSec=90
+OnUnitActiveSec=300
+
+[Install]
+WantedBy=timers.target

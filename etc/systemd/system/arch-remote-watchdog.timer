@@ -1,0 +1,11 @@
+[Unit]
+Description=Run ARCH remote maintenance watchdog every 5 minutes
+
+[Timer]
+OnBootSec=120
+OnUnitActiveSec=300
+AccuracySec=30s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

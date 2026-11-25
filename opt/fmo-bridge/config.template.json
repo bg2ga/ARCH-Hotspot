@@ -1,0 +1,72 @@
+{
+  "server": {
+    "callsign": "",
+    "uid": 0,
+    "mqtt_host": "fmo.hljrsa.cn",
+    "mqtt_port": 1883,
+    "reg_port": 8081,
+    "certFingerprint": ""
+  },
+  "client": {
+    "callsign": "",
+    "uid": 0,
+    "role": "user",
+    "user_cert": "./pki/user_fm.json",
+    "user_key": "./pki/user_fm.key",
+    "intermediate_cert": "./pki/intermediate.json"
+  },
+  "fm": {
+    "bind_addr": "0.0.0.0",
+    "bind_port": 49880,
+    "rxgain": 1.0,
+    "txgain": 0.675,
+    "vendor": 0,
+    "debug": false,
+    "dsp": {
+      "enable": true,
+      "expander": false,
+      "expander_thr": 0.01,
+      "expander_ratio": 3.0,
+      "agc": false,
+      "agc_target": 0.08,
+      "agc_max_gain_db": 24.0,
+      "agc_min_gain_db": -26.0,
+      "agc_down_ms": 12.0,
+      "agc_up_ms": 600.0,
+      "hpf_hz": 180.0,
+      "shelf_db": 0.0,
+      "shelf_hz": 1800.0,
+      "limit": 0.95,
+      "agc_rms_ms": 120.0,
+      "agc_gate": 0.004,
+      "bass_cut_db": -4.0,
+      "bass_cut_hz": 250.0,
+      "limiter_attack_ms": 2.0,
+      "limiter_release_ms": 200.0,
+      "peak_ceiling": 0.99
+    },
+    "tone": {
+      "enable": true,
+      "freq": 1000,
+      "ms": 200,
+      "delay_ms": 0,
+      "gain": 1.0
+    },
+    "ctcss": {
+      "enable": true,
+      "rx": true,
+      "tx": false,
+      "freq": 88.5,
+      "rx_tone": "88.5",
+      "tx_tone": "off",
+      "tx_enabled": false
+    },
+    "app_hq_gain": 0.8
+  },
+  "voice": {
+    "codec": "radpcm",
+    "topic": "FMO/RAW",
+    "relay_to_public": false
+  },
+  "app_relay_enabled": false
+}

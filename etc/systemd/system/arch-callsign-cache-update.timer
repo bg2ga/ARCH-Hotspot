@@ -1,0 +1,8 @@
+[Unit]
+Description=Daily ARCH TETRA callsign cache refresh
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=24h
+AccuracySec=5m
+[Install]
+WantedBy=timers.target

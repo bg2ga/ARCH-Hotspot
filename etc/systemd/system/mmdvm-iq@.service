@@ -1,0 +1,22 @@
+[Unit]
+StartLimitIntervalSec=0
+Description=MMDVM-IQ channel %i (SDR modem, UDP to MMDVM-Multi)
+After=network.target mmdvm-multi.service
+BindsTo=mmdvm-multi.service
+PartOf=mmdvm-multi.service
+
+[Service]
+Type=simple
+User=root
+Group=mmdvm-web
+ExecStart=/usr/local/bin/MMDVM-IQ /etc/MMDVM-IQ-%i.ini
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+Nice=-5
+LimitRTPRIO=99
+LimitNOFILE=16384
+
+[Install]
+WantedBy=multi-user.target

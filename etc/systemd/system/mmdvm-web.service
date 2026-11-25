@@ -1,0 +1,16 @@
+[Unit]
+Description=MMDVM-IQ Web Console (Gunicorn)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mmdvm-web
+Group=mmdvm-web
+WorkingDirectory=/opt/mmdvm-web
+ExecStart=/usr/local/bin/arch-web-start
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

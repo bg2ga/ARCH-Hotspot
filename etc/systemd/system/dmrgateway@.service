@@ -1,0 +1,20 @@
+[Unit]
+Description=DMRGateway channel %i
+After=network.target mmdvm-multi.service
+ConditionPathExists=/etc/mmdvm/dmr-ready
+# [1.0.161] 只有对应的通道配置文件存在时才启动该实例
+ConditionPathExists=/etc/DMRGateway-%i.ini
+Wants=mmdvm-multi.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/DMRGateway /etc/DMRGateway-%i.ini
+Restart=always
+RestartSec=3
+User=root
+WorkingDirectory=/
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

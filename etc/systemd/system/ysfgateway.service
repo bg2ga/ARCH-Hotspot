@@ -1,0 +1,14 @@
+[Unit]
+Description=YSFGateway Service
+After=network-online.target network.target mmdvm-multi.service
+Wants=network-online.target mmdvm-multi.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/YSFGateway /etc/YSFGateway.ini
+Restart=always
+RestartSec=10
+User=root
+
+[Install]
+WantedBy=multi-user.target

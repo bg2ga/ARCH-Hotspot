@@ -1,0 +1,11 @@
+[Unit]
+Description=ARCH USB/4G network auto-config
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/arch-usb-net.sh
+
+[Install]
+WantedBy=multi-user.target

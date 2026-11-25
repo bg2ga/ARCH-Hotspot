@@ -1,0 +1,26 @@
+[Unit]
+StartLimitIntervalSec=0
+Description=MMDVM-Multi (SX1255 multi-channel I/Q front end)
+After=network.target mosquitto.service
+Before=mmdvm-iq@1.service mmdvm-iq@2.service
+Wants=network.target mosquitto.service
+
+[Service]
+Type=simple
+User=root
+Group=mmdvm-web
+WorkingDirectory=/opt/src-mmdvm/MMDVM-Multi
+ExecCondition=/usr/local/bin/arch-sx-probe
+ExecStart=/usr/local/bin/MMDVM-Multi /etc/MMDVM-Multi.ini
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+CPUSchedulingPolicy=fifo
+CPUSchedulingPriority=73
+Nice=-5
+LimitRTPRIO=99
+LimitNOFILE=16384
+
+[Install]
+WantedBy=multi-user.target

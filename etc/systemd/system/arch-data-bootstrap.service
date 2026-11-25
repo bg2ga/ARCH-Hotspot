@@ -1,0 +1,16 @@
+[Unit]
+Description=ARCH 数据库首次下载与更新
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/arch-data-bootstrap.sh
+TimeoutStartSec=0
+Nice=10
+IOSchedulingClass=idle
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

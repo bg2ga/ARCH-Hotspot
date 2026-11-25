@@ -1,0 +1,29 @@
+# Secrets and per-device identity
+etc/mmdvm/arch-tunnel.key
+etc/mmdvm/remote-debug.secret
+etc/mmdvm/device-id
+etc/mmdvm/remote-tunnel.port
+**/*.key
+**/*.pem
+**/*.p12
+**/*.pfx
+
+# Runtime state, logs and backups
+**/__pycache__/
+**/*.pyc
+*.log
+*.bak
+*.bak-*
+*.before-*
+*.orig
+*.old
+*.tmp
+*.part
+*~
+
+# Build/package outputs
+*.tar.gz
+*.zip
+*.deb
+*.img
+*.img.xz

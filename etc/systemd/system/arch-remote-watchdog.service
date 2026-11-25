@@ -1,0 +1,9 @@
+[Unit]
+Description=ARCH remote maintenance watchdog (agent/tunnel self-heal)
+After=network-online.target arch-remote-agent.service
+Wants=network-online.target arch-remote-agent.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/arch-remote-watchdog.sh
+Nice=10

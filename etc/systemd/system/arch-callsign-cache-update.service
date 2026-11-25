@@ -1,0 +1,6 @@
+[Unit]
+Description=Refresh ARCH TETRA callsign cache
+After=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/arch-callsign-cache-update.sh

@@ -1,0 +1,10 @@
+[Unit]
+Description=ARCH remote debug agent timer
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=10s
+AccuracySec=2s
+
+[Install]
+WantedBy=timers.target

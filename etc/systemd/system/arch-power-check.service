@@ -1,0 +1,10 @@
+[Unit]
+Description=ARCH power / throttling check
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /usr/local/bin/arch-power-check.sh
+# [1.0.154] 欠压时脚本以 1 退出——这是"检测到问题"的信号，不是服务失败。
+# 不加这一行，systemctl --failed 和网页都会把它当成"服务起不来"，误导用户。
+SuccessExitStatus=1

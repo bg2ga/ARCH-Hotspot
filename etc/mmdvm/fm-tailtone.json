@@ -1,0 +1,7 @@
+{
+  "enable": true,
+  "freq": 1000,
+  "ms": 200,
+  "delay_ms": 0,
+  "gain": 1.0
+}

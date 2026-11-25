@@ -1,0 +1,35 @@
+#!/bin/bash
+# ARCH 射频引擎切换 —— 在“包内引擎”和“设备上原来那版引擎”之间切换。
+# 用途：升级后若射频收发异常，先 arch-engine-switch status 看当前用哪版，
+#      再 arch-engine-switch alt 试设备原版引擎（或 pkg 切回包内版）。
+set -uo pipefail
+DIR=/usr/local/share/arch-hotspot/engine
+CUR=/usr/local/bin/MMDVM-Multi
+ALT="$DIR/MMDVM-Multi.device-160k"
+PKG="$DIR/MMDVM-Multi.pkg"
+BAKDIR=/var/backups/mmdvm/firmware
+show(){ [ -f "$1" ] && printf '  %-42s %9s B  md5=%s\n' "$(basename "$1")" "$(stat -c%s "$1")" "$(md5sum "$1" | cut -d" " -f1)"; }
+case "${1:-status}" in
+  status)
+    echo "当前运行引擎："; show "$CUR"
+    echo "可切换的引擎："; show "$ALT"; show "$PKG"
+    echo "历史备份（最近 5 个）："; ls -1t "$BAKDIR"/MMDVM-Multi.* 2>/dev/null | head -5 | while read -r f; do show "$f"; done
+    echo "服务状态：$(systemctl is-active mmdvm-multi.service 2>/dev/null)"
+    ;;
+  alt|pkg|restore)
+    SRC=""
+    [ "$1" = alt ] && SRC="$ALT"
+    [ "$1" = pkg ] && SRC="$PKG"
+    [ "$1" = restore ] && SRC="$(ls -1t "$BAKDIR"/MMDVM-Multi.* 2>/dev/null | head -1)"
+    [ -n "$SRC" ] && [ -f "$SRC" ] || { echo "找不到要切换的引擎：$1"; exit 1; }
+    install -m 0755 "$SRC" "$CUR" || exit 1
+    systemctl restart mmdvm-multi.service 2>/dev/null || true
+    sleep 3
+    echo "已切换到: $SRC"
+    echo "服务状态: $(systemctl is-active mmdvm-multi.service 2>/dev/null)"
+    md5sum "$CUR" | awk '{print "当前 md5: "$1}'
+    ;;
+  start|stop|restart)
+    systemctl "$1" mmdvm-multi.service; sleep 2; systemctl is-active mmdvm-multi.service;;
+  *) echo "用法: arch-engine-switch {status|alt|pkg|restore|start|stop|restart}"; exit 2;;
+esac

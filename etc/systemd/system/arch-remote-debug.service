@@ -1,0 +1,8 @@
+[Unit]
+Description=ARCH remote debug agent (root diagnostics over HTTPS-less outbound channel)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/libexec/arch-remote-debug.py
+Nice=10
+IOSchedulingClass=idle

@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+[ "$(id -u)" -eq 0 ] || { echo "请使用 sudo 运行"; exit 1; }
+. /etc/arch-hotspot-release
+URL="$UPDATE_BASE/$CHANNEL/current.json"
+umask 077
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+timeout 20 curl -4 -fsSL --retry 1 --connect-timeout 5 --max-time 15 "$URL" -o "$TMP/current.json" || { echo "无法获取更新清单（网络超时）"; exit 1; }
+FILE=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d["file"])' "$TMP/current.json")
+NEWVER=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d["version"])' "$TMP/current.json")
+if [ "$NEWVER" = "$VERSION" ]; then echo "已是最新版本 $VERSION"; exit 0; fi
+if [ "$(printf '%s\n%s\n' "$VERSION" "$NEWVER" | sort -V | tail -n1)" != "$NEWVER" ]; then
+  echo "服务器版本 $NEWVER 不高于当前版本 $VERSION，已忽略"; exit 0
+fi
+WANT=$(python3 -c 'import json,sys; print((json.load(open(sys.argv[1])) or {}).get("sha256",""))' "$TMP/current.json")
+[ -n "$WANT" ] || { echo "更新清单缺少 SHA256，拒绝以 root 安装远程包"; exit 1; }
+timeout 900 curl -4 -fL --retry 2 --connect-timeout 8 --max-time 900 "$UPDATE_BASE/$CHANNEL/$FILE" -o "$TMP/update.tar.gz"
+if [ -n "$WANT" ]; then
+  echo "$WANT  $TMP/update.tar.gz" | sha256sum -c - || { echo "更新包校验失败，已中止"; exit 1; }
+fi
+if command -v pigz >/dev/null 2>&1; then
+  tar -I pigz -xf "$TMP/update.tar.gz" -C "$TMP"
+else
+  tar -xzf "$TMP/update.tar.gz" -C "$TMP"
+fi
+PKG=$(find "$TMP" -mindepth 1 -maxdepth 1 -type d -name 'arch-hotspot-*' | head -1)
+test -f "$PKG/install.sh"
+REL=/etc/arch-hotspot-release
+RELBAK="$(mktemp)"
+cp -a "$REL" "$RELBAK" 2>/dev/null || true
+RC=0
+( cd "$PKG" && bash -euo pipefail ./install.sh ) || RC=$?
+if [ "$RC" -eq 0 ]; then
+  DONE="$(tr -d '
+' < /etc/mmdvm/arch-install-complete 2>/dev/null || true)"
+  if [ "$DONE" != "$NEWVER" ]; then
+    echo "安装未完成：缺少完成标记（期望 $NEWVER，实际 $DONE）"
+    RC=1
+  fi
+fi
+if [ "$RC" -ne 0 ]; then
+  if [ -s "$RELBAK" ]; then cp -a "$RELBAK" "$REL" 2>/dev/null || true; fi
+  echo "更新失败，已恢复旧版本标记"
+fi
+rm -f "$RELBAK" /var/lib/arch/update-status.cache 2>/dev/null || true
+exit "$RC"

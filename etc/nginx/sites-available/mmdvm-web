@@ -1,0 +1,26 @@
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+
+    # [FIX 1.0.106] 热点门户检测：兼容 /generate_204_<UUID>，统一 302 到设备页面
+    location ^~ /generate_204 { return 302 http://10.42.0.1/; }
+    location ^~ /gen_204 { return 302 http://10.42.0.1/; }
+    location = /hotspot-detect.html { return 302 http://10.42.0.1/; }
+    location = /canonical.html { return 302 http://10.42.0.1/; }
+    location = /connecttest.txt { return 302 http://10.42.0.1/; }
+    location = /ncsi.txt { return 302 http://10.42.0.1/; }
+    location = /success.txt { return 302 http://10.42.0.1/; }
+    client_max_body_size 1m;
+
+    location / {
+        proxy_pass http://127.0.0.1:18080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300;
+        proxy_send_timeout 300;
+    }
+}

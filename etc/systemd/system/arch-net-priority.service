@@ -1,0 +1,8 @@
+[Unit]
+Description=ARCH network priority and internet failover
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/arch-net-priority.sh

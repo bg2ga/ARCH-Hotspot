@@ -1,0 +1,16 @@
+#!/bin/bash
+case "${1:-status}" in
+  on)  mkdir -p /etc/mmdvm; echo 1 > /etc/mmdvm/remote-debug.enable
+       systemctl enable --now arch-remote-agent.service arch-remote-tunnel.service arch-remote-debug.timer >/dev/null 2>&1
+       echo "远程调测：已开启（独立设备ID + root 调测通道 + 北京反向隧道）";;
+  off) mkdir -p /etc/mmdvm; echo 0 > /etc/mmdvm/remote-debug.enable
+       systemctl disable --now arch-remote-tunnel.service arch-remote-debug.timer >/dev/null 2>&1
+       echo "远程调测：已关闭（隧道断开，本机调测端口停用）";;
+  *)   printf "设备ID: "; /usr/local/bin/arch-device-id 2>/dev/null || echo "(未生成)"
+       printf "开关: "; cat /etc/mmdvm/remote-debug.enable 2>/dev/null || echo "(默认开)"
+       printf "secret: "; [ -s /etc/mmdvm/remote-debug.secret ] && echo "present" || echo "missing"
+       printf "agent: "; systemctl is-active arch-remote-agent.service 2>/dev/null || true
+       printf "tunnel: "; systemctl is-active arch-remote-tunnel.service 2>/dev/null || true
+       printf "timer: "; systemctl is-active arch-remote-debug.timer 2>/dev/null || true
+       [ -f /etc/mmdvm/remote-tunnel.port ] && sed 's/^/端口信息: /' /etc/mmdvm/remote-tunnel.port || true;;
+esac

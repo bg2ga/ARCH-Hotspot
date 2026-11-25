@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Probe SX1255, with a retry and a narrow reset of SX-looking USB devices only.
+set -u
+PROBE=/usr/bin/SoapySDRUtil
+probe() { [ -x "$PROBE" ] && "$PROBE" --probe=driver=sx >/dev/null 2>&1; }
+# A running MMDVM-Multi owns the SDR. In that state a probe cannot acquire it,
+# but the active service is itself proof that the hardware is usable.
+if systemctl is-active --quiet mmdvm-multi.service 2>/dev/null; then
+  mkdir -p /etc/mmdvm; touch /etc/mmdvm/soapy-sx-verified; exit 0
+fi
+if probe; then mkdir -p /etc/mmdvm; touch /etc/mmdvm/soapy-sx-verified; exit 0; fi
+for d in /sys/bus/usb/devices/*; do
+  [ -f "$d/idVendor" ] || continue
+  desc="$(cat "$d/manufacturer" "$d/product" 2>/dev/null || true)"
+  case "$desc" in
+    *[Ss][Xx]*|*[Ss]oapy*|*SX1255*|*sx1255*)
+      [ -w "$d/authorized" ] || continue
+      echo 0 > "$d/authorized" 2>/dev/null || true
+      sleep 1
+      echo 1 > "$d/authorized" 2>/dev/null || true
+      ;;
+  esac
+done
+for _ in 1 2 3 4 5; do
+  sleep 2
+  if probe; then mkdir -p /etc/mmdvm; touch /etc/mmdvm/soapy-sx-verified; exit 0; fi
+done
+exit 1

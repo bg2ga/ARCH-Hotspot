@@ -1,0 +1,9 @@
+[Unit]
+Description=MMDVM WiFi auto-connect at boot
+After=NetworkManager.service network-online.target
+Wants=NetworkManager.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/sys-manage.sh wifi-boot
+[Install]
+WantedBy=multi-user.target

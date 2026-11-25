@@ -1,0 +1,18 @@
+[Unit]
+Description=DMRGateway Service
+After=network.target mmdvm-multi.service
+ConditionPathExists=/etc/mmdvm/dmr-ready
+Wants=mmdvm-multi.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/DMRGateway /etc/DMRGateway.ini
+Restart=always
+RestartSec=3
+User=root
+WorkingDirectory=/
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=ARCH 数据库首次下载与每日更新
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=1d
+Persistent=true
+Unit=arch-data-bootstrap.service
+
+[Install]
+WantedBy=timers.target

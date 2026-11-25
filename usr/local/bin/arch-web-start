@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Keep one worker for predictable memory use; adapt only thread concurrency.
+# Override with ARCH_WEB_THREADS when the operator explicitly wants another value.
+if [ -n "${ARCH_WEB_THREADS:-}" ]; then
+  threads="$ARCH_WEB_THREADS"
+elif [ -r /proc/meminfo ]; then
+  mem_mb=$(awk '/^MemTotal:/{print int($2/1024); exit}' /proc/meminfo 2>/dev/null || echo 0)
+  if [ "$mem_mb" -lt 768 ]; then
+    threads=2
+  elif [ "$mem_mb" -lt 1536 ]; then
+    threads=4
+  else
+    threads=6
+  fi
+else
+  threads=4
+fi
+
+case "$threads" in
+  ''|*[!0-9]*|0) threads=4 ;;
+esac
+exec /usr/bin/gunicorn --workers 1 --threads "$threads" --timeout 120 \
+  --chdir /opt/mmdvm-web --pythonpath /opt/mmdvm-web \
+  --bind 127.0.0.1:18080 app:app

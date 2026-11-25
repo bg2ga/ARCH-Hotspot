@@ -1,0 +1,290 @@
+/*
+ *   Copyright (C) 2023-2026 by Adrian Musceac YO8RZZ
+ *
+ *   This program is free software; you can redistribute it and/or modify
+ *   it under the terms of the GNU General Public License as published by
+ *   the Free Software Foundation; either version 2 of the License, or
+ *   (at your option) any later version.
+ *
+ *   This program is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with this program; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ */
+
+#include "Transmitter.h"
+#include "Thread.h"
+#include "Log.h"
+
+#include <cassert>
+#include <algorithm>
+
+Transmitter::Transmitter(Network* network, Device* device, FMMod* fm_mod, Resampler* resampler, Rotator* rotator,
+                         Channelizer* channelizer, DMRTiming* burst_timer,
+                         unsigned int num_active_channels, unsigned int num_pfb_channels, bool needs_timestamp,
+                         float dac_scaling, float symbol_deviation) : 
+m_running(true),
+m_stopped(false),
+m_timingInit(false),
+m_tx(false),
+m_timestamping(needs_timestamp),
+m_DACScaling(dac_scaling),
+m_symbolDeviation(symbol_deviation),
+m_activeChannels(num_active_channels),
+m_pfbChannels(num_pfb_channels),
+m_timingCorrection(0LL),
+m_network(network),
+m_device(device),
+m_fmMod(fm_mod),
+m_resampler(resampler),
+m_rotator(rotator),
+m_channelizer(channelizer),
+m_burstTimer(burst_timer)
+{
+    assert(m_activeChannels <= MAX_MMDVM_CHANNELS);
+    assert(m_pfbChannels > 1U);
+    assert(m_pfbChannels <= MAX_PFB_CHANNELS);
+
+    for (unsigned int i = 0U; i < m_activeChannels; i++)
+        m_sn[i] = 1;
+
+    unsigned int max_chan_real = m_pfbChannels / 2U - 1U;
+    max_chan_real = std::min<unsigned int>(max_chan_real, 4U); // FIXME: flexible number of channels
+    m_fillReal    = std::min<unsigned int>(max_chan_real, m_activeChannels);
+
+    m_channelizerSamples.resize(MAX_MMDVM_CHANNELS * TX_INTERP_OUT_SIZE);
+    m_freqModulated.resize(SAMPLES_PER_SLOT);
+    m_resampled.resize(TX_INTERP_OUT_SIZE);
+    m_channelized.resize(TX_SAMP_OUT_SIZE);
+    m_channels.resize(MAX_PFB_CHANNELS);
+    m_outputSamples.resize(TX_SAMP_OUT_SIZE);
+}
+
+Transmitter::~Transmitter()
+{
+}
+
+void Transmitter::stop()
+{
+    m_running = false;
+
+    wait();
+}
+
+bool Transmitter::stopped() const
+{
+    return m_stopped;
+}
+
+void Transmitter::nextSlot(unsigned int channel)
+{
+    if (m_sn[channel] == 2U)
+        m_sn[channel] = 1U;
+    else
+        m_sn[channel] = 2U;
+}
+
+void Transmitter::readNetwork()
+{
+    for (unsigned int j = 0U; j < m_activeChannels; j++) {
+        unsigned char reply_message[NETWORK_RX_PACKET_SIZE];
+        int ret = m_network->read(reply_message, NETWORK_RX_PACKET_SIZE, j);
+
+        if ((unsigned int)ret != NETWORK_RX_PACKET_SIZE)
+            continue;
+
+        // the code used to work with variable packet sizes, but it's no longer needed
+        uint32_t num_items = 0U;
+        ::memcpy(&num_items, reply_message, sizeof(uint32_t));
+
+        if (num_items == SAMPLES_PER_SLOT) {
+            uint8_t control[SAMPLES_PER_SLOT];
+            int16_t data[SAMPLES_PER_SLOT];
+            ::memcpy(&control, reply_message + sizeof(uint32_t), num_items * sizeof(uint8_t));
+      
+            ::memcpy(&data, reply_message + sizeof(uint32_t) + num_items * sizeof(uint8_t), num_items * sizeof(int16_t));
+
+            for (unsigned int i = 0U; i < num_items; i++) {
+                m_controlBuf[j].push_back(control[i]);
+                m_sampleBuf[j].push_back((float(data[i]) * m_symbolDeviation)/32767.0f);
+            }
+        }
+    }
+}
+
+void Transmitter::entry()
+{
+    while(m_running) {
+        long long timeNs = 0LL;
+
+        if (!m_timingInit) {
+            m_burstTimer->lock();
+            bool has_time = true;
+
+            for (unsigned int i = 0U; i < m_activeChannels; i++) {
+                if (!m_burstTimer->getInit(i)) {
+                    has_time = false;
+                    break;
+                }
+            }
+
+            m_burstTimer->unlock();
+
+            if (has_time) {
+                m_timingInit = true;
+
+                // To avoid race condition with LMS7002M calibration routine, wait 120 msec after init to set gain to minimum
+                m_device->setTx(false);
+            }
+        }
+
+        if (!m_timingInit) {
+            CThread::sleepMilli(2U);
+            continue;
+        }
+
+        readNetwork();
+
+        if (m_timingCorrection > 0) {
+            CThread::sleepNano(m_timingCorrection);
+            m_timingCorrection = 0;
+        }
+
+        bool channelIdle[MAX_MMDVM_CHANNELS];
+        bool chanTiming[MAX_MMDVM_CHANNELS];
+        for (unsigned int i = 0U; i < MAX_MMDVM_CHANNELS; i++) {
+            channelIdle[i] = false;
+            chanTiming[i]  = false;
+        }
+
+        m_burstTimer->lock();
+        for (unsigned int i = 0U; i < m_activeChannels; i++) {
+            long long time = 0LL;
+            if (m_sampleBuf[i].size() < 1) {
+                channelIdle[i] = true;
+                m_sampleBuf[i].insert(m_sampleBuf[i].begin(), SAMPLES_PER_SLOT, 0.0F);
+                m_controlBuf[i].insert(m_controlBuf[i].begin(), SAMPLES_PER_SLOT, MARK_NONE);
+                time = m_burstTimer->allocateSlot(m_sn[i], m_timingCorrection, i) - (MMDVM_MARK_POSITION * TIME_PER_SAMPLE);
+
+                if (timeNs == 0LL)
+                    timeNs = time;
+
+                chanTiming[i] = true;
+                nextSlot(i);
+            } else {
+                for (unsigned int j = 0U; j < m_controlBuf[i].size(); j++) {
+                    uint8_t control = m_controlBuf[i].at(j);
+                    if (control == MARK_SLOT1) {
+                        chanTiming[i] = true;
+                        m_sn[i] = 1U;
+                        time = m_burstTimer->allocateSlot(1U, m_timingCorrection, i) - (j * TIME_PER_SAMPLE);
+                        if (timeNs == 0LL)
+                            timeNs = time;
+                    } else if (control == MARK_SLOT2) {
+                        chanTiming[i] = true;
+                        m_sn[i] = 2U;
+                        time = m_burstTimer->allocateSlot(2U, m_timingCorrection, i) - (j * TIME_PER_SAMPLE);
+                        if (timeNs == 0LL)
+                            timeNs = time;
+                    }
+                }
+            }
+
+            if (!chanTiming[i]) {
+                time = m_burstTimer->allocateSlot(m_sn[i], m_timingCorrection, i) - (MMDVM_MARK_POSITION * TIME_PER_SAMPLE);
+                if (timeNs == 0LL)
+                    timeNs = time;
+                chanTiming[i] = true;
+                nextSlot(i);
+            }
+        }
+
+        m_burstTimer->unlock();
+
+        setTx(channelIdle);
+
+        processSamples(m_outputSamples.data(), channelIdle);
+
+        void* buffs[1] = {(void*)m_outputSamples.data()};
+
+        int flags = 0;
+        if (m_timestamping && (timeNs > 0LL))
+            flags |= SOAPY_SDR_HAS_TIME;
+
+        int ret = m_device->getDevice()->writeStream(m_device->getTxStream(), buffs, TX_INTERP_OUT_SIZE * m_pfbChannels, flags, timeNs);
+        if (ret <= 0) {
+            ::LogError("Error writing samples to device: %s", SoapySDR_errToStr(ret));
+        } else if ((unsigned int)ret != (TX_INTERP_OUT_SIZE * m_pfbChannels)) {
+            ::LogError("TX overrun occured, only wrote %d samples!", ret);
+        }
+    }
+
+    m_stopped = true;
+}
+
+void Transmitter::processSamples(std::complex<float>* output_samples, bool* channel_idle)
+{
+    assert(output_samples != nullptr);
+    assert(channel_idle != nullptr);
+
+    for (unsigned int i = 0U; i < m_activeChannels; i++) {
+        std::complex<float>* channelizer_samples = m_channelizerSamples.data() + i * TX_INTERP_OUT_SIZE;
+        // Reused member storage must be zeroed before the guarded processing
+        // branch; the old stack array was implicitly zero-initialized each call.
+        std::fill(channelizer_samples, channelizer_samples + TX_INTERP_OUT_SIZE, std::complex<float>(0.0F, 0.0F));
+        if (m_sampleBuf[i].size() >= SAMPLES_PER_SLOT) {
+            m_fmMod->modulate(i, m_sampleBuf[i].data(), SAMPLES_PER_SLOT, m_freqModulated.data());
+
+            if (channel_idle[i]) {
+                for (unsigned int j = 0U; j < SAMPLES_PER_SLOT; j++)
+                    m_freqModulated[j] = {0.0F, 0.0F}; // zero it but keep next phase step in freqmod
+            }
+
+            m_resampler->upsample(i, m_freqModulated.data(), SAMPLES_PER_SLOT, m_resampled.data());
+            ::memcpy(channelizer_samples, m_resampled.data(), TX_INTERP_OUT_SIZE * sizeof(std::complex<float>));
+            m_sampleBuf[i].erase(m_sampleBuf[i].begin(), m_sampleBuf[i].begin() + SAMPLES_PER_SLOT);
+            m_controlBuf[i].erase(m_controlBuf[i].begin(), m_controlBuf[i].begin() + SAMPLES_PER_SLOT);
+        }
+    }
+  
+    const float scale = m_DACScaling / float(m_activeChannels);
+    for (unsigned int i = 0U; i < TX_INTERP_OUT_SIZE; i++) {
+        std::fill(m_channels.begin(), m_channels.end(), std::complex<float>(0.0F, 0.0F));
+        for (unsigned int k = 0U; k < m_fillReal; k++)
+            m_channels[k] = m_channelizerSamples[k * TX_INTERP_OUT_SIZE + i] * scale;
+
+        for (unsigned int m = m_pfbChannels - 1U, p = m_fillReal; p < m_activeChannels; m--, p++)
+            m_channels[m] = m_channelizerSamples[p * TX_INTERP_OUT_SIZE + i] * scale;
+
+        m_channelizer->synthesize(m_channels.data(), m_channelized.data() + i * m_pfbChannels);
+    }
+
+    m_rotator->rotate(m_channelized.data(), TX_INTERP_OUT_SIZE * m_pfbChannels, output_samples);
+}
+
+void Transmitter::setTx(bool* channelIdle)
+{
+    assert(channelIdle != nullptr);
+
+    bool active = false;
+    for (unsigned int i = 0U; i < m_activeChannels; i++) {
+        if (!channelIdle[i]) {
+            active = true;
+            break;
+        }
+    }
+
+    if (!m_tx && active) {
+        m_tx = true;
+        m_device->setTx(true);
+        ::LogMessage("TX on");
+    } else if (m_tx && !active) {
+        m_tx = false;
+        m_device->setTx(false);
+        ::LogMessage("TX off");
+    }
+}

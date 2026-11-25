@@ -1,0 +1,10 @@
+[Unit]
+Description=ARCH fallback Wi-Fi AP check (ARCH多模网关)
+After=NetworkManager.service network-online.target
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/arch-ap-fallback.sh
+Nice=5
+TimeoutStartSec=90

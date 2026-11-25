@@ -1,0 +1,14 @@
+[Unit]
+Description=ircDDBGateway D-STAR Service
+After=network-online.target network.target mmdvm-multi.service
+Wants=network-online.target mmdvm-multi.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/ircddbgatewayd /etc/ircddbgateway
+Restart=always
+RestartSec=10
+User=root
+
+[Install]
+WantedBy=multi-user.target

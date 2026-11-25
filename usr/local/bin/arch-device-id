@@ -1,0 +1,22 @@
+#!/bin/bash
+# ARCH 热点唯一设备ID：优先树莓派序列号，生成稳定、可读的独立标识。
+set -u
+CACHE=/etc/mmdvm/device-id
+if [ -s "$CACHE" ]; then
+  cat "$CACHE"
+  exit 0
+fi
+SER="$(tr -d '\000\r\n ' < /proc/device-tree/serial-number 2>/dev/null || true)"
+if [ -z "$SER" ]; then
+  SER="$(tr -d ' \r\n' < /etc/machine-id 2>/dev/null || true)"
+fi
+if [ -z "$SER" ]; then
+  SER="$(hostname 2>/dev/null || true)"
+fi
+SER="$(printf '%s' "$SER" | tr 'A-F' 'a-f' | tr -cd 'a-z0-9')"
+[ -n "$SER" ] || SER="unknown"
+ID="arch-${SER: -12}"
+mkdir -p /etc/mmdvm 2>/dev/null || true
+printf '%s\n' "$ID" > "$CACHE" 2>/dev/null || true
+chmod 0644 "$CACHE" 2>/dev/null || true
+printf '%s\n' "$ID"

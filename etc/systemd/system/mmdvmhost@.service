@@ -1,0 +1,20 @@
+[Unit]
+StartLimitIntervalSec=0
+Description=MMDVM-Host channel %i
+After=network.target mmdvm-iq@%i.service
+BindsTo=mmdvm-iq@%i.service
+PartOf=mmdvm-iq@%i.service
+
+[Service]
+Type=simple
+User=root
+Group=mmdvm-web
+ExecStart=/usr/local/bin/MMDVM-Host /etc/MMDVM-Host-%i.ini
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+LimitNOFILE=16384
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+[Unit]
+Description=ARCH gateway automatic connection
+After=network-online.target mosquitto.service mmdvm-multi.service
+Wants=network-online.target mosquitto.service
+ConditionPathExists=/etc/mmdvm/channels.json
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/libexec/arch-gateway-autoconnect.py
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

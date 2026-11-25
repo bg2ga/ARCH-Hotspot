@@ -1,0 +1,11 @@
+[Unit]
+Description=ARCH reverse tunnel to Beijing relay (port 2222 -> relay)
+After=network-online.target arch-remote-agent.service
+Wants=network-online.target
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/arch-remote-tunnel.sh
+Restart=always
+RestartSec=5
+[Install]
+WantedBy=multi-user.target

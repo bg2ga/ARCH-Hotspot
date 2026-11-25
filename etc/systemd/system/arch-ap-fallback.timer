@@ -1,0 +1,11 @@
+[Unit]
+Description=Run ARCH fallback Wi-Fi AP check every 30s
+
+[Timer]
+OnBootSec=5
+OnUnitActiveSec=30
+AccuracySec=1s
+Persistent=false
+
+[Install]
+WantedBy=timers.target
